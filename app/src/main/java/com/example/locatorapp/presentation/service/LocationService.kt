@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.locatorapp.R
@@ -50,6 +51,22 @@ class LocationService @Inject constructor() : Service() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
     }
 
+    private fun createNotification(): Notification {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            notificationIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Tracking Location")
+            .setContentText("LocatorApp is Tracking your Location")
+            .setSmallIcon(R.drawable.baseline_location_on_black_24dp)
+            .setContentIntent(pendingIntent)
+            .build()
+    }
+
     private fun handleNewLocation(latitude: Double, longitude: Double) {
         val location = Location(latitude, longitude, System.currentTimeMillis())
         iOScope.launch {
@@ -63,6 +80,7 @@ class LocationService @Inject constructor() : Service() {
         override fun onLocationResult(locationResult: LocationResult) {
             super.onLocationResult(locationResult)
             val location = locationResult.lastLocation
+            Log.d("locationCallback###", "$location")
             handleNewLocation(location.latitude, location.longitude)
         }
     }
@@ -80,11 +98,9 @@ class LocationService @Inject constructor() : Service() {
     private fun startLocationUpdates() {
         createNotificationChannel()
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-
         val locationRequest = LocationRequest.create().apply {
-            interval = 60000
-            fastestInterval = 60000
+            interval = 5000
+            fastestInterval = 5000
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
@@ -103,22 +119,10 @@ class LocationService @Inject constructor() : Service() {
         startForeground(NOTIFICATION_ID, notification)
     }
 
-    private fun createNotification(): Notification {
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            notificationIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Tracking Location")
-            .setContentText("LocatorApp is Tracking your Location")
-            .setSmallIcon(R.drawable.baseline_location_on_black_24dp)
-            .setContentIntent(pendingIntent)
-            .build()
+    override fun onCreate() {
+        super.onCreate()
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
     }
-
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startLocationUpdates()

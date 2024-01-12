@@ -1,9 +1,10 @@
 package com.example.locatorapp.presentation
 
+import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -20,13 +21,24 @@ class MainActivity : ComponentActivity() {
     private var startButton: Button? = null
     private var stopButton: Button? = null
     private var feedbackTextView: TextView? = null
-    private var isServiceRunning:Boolean = false
-    private val requestLocationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {permissions ->
-            val fineLocationGranted = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION]?: false
-            val coarseLocationGranted = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION]?: false
-            if (fineLocationGranted && coarseLocationGranted) {
+    private var isServiceRunning = false
+    private val requestBackgroundLocationPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
                 startLocationService()
+            }
+        }
+    private val requestForegroundLocationsPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            val fineLocationResult = result[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+            val coarseLocationResult = result[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+
+            if (fineLocationResult && coarseLocationResult) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    requestBackgroundLocationPermissionsLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                } else {
+                    startLocationService()
+                }
             }
         }
 
@@ -47,14 +59,14 @@ class MainActivity : ComponentActivity() {
         feedbackTextView?.text = statusText
     }
 
-    private fun checkPermissions(): Boolean {
+    private fun checkForegroundPermissions(): Boolean {
         val fineLocationPermission = ContextCompat.checkSelfPermission(
             this,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION
         )
         val coarseLocationPermission = ContextCompat.checkSelfPermission(
             this,
-            android.Manifest.permission.ACCESS_COARSE_LOCATION
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
 
         if (fineLocationPermission == PackageManager.PERMISSION_GRANTED &&
@@ -65,14 +77,33 @@ class MainActivity : ComponentActivity() {
         return false
     }
 
+    private fun checkPermissions(): Boolean {
+        if (checkForegroundPermissions()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val backgroundLocationPermission = ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                )
+
+                if (backgroundLocationPermission == PackageManager.PERMISSION_GRANTED) {
+                    return true
+                }
+                return false
+            } else {
+                return true
+            }
+        }
+        return false
+    }
+
     private fun startLocationService() {
         if (!checkPermissions()) {
             updateUI("permissions not granted")
             val permissionsToRequest = arrayOf(
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
-            requestLocationPermissionLauncher.launch(permissionsToRequest)
+            requestForegroundLocationsPermissionsLauncher.launch(permissionsToRequest)
         } else {
             val serviceIntent = Intent(this, LocationService::class.java)
             startService(serviceIntent)
